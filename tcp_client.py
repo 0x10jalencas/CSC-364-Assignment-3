@@ -1,10 +1,14 @@
+import struct
+import socket
 from dataclasses import dataclass
+
+
 
 @dataclass
 class Client_Packet:
     seq_number: int
     checksum: int
-    data: int
+    data: bytes
 
 @dataclass
 class Server_Packet:
@@ -12,7 +16,7 @@ class Server_Packet:
 
 last_ack_number = 0
 
-def slow_start(cwnd, ssthresh, ack, rtt):
+def slow_start(cwnd, ssthresh, ack, rtt, last_ack_number):
     for server_packet in ack:
         if server_packet.ack_number > last_ack_number:
             cwnd += 1
@@ -21,9 +25,9 @@ def slow_start(cwnd, ssthresh, ack, rtt):
             cwnd = ssthresh
             break
     
-    return cwnd
+    return cwnd, last_ack_number
 
-def congestion_avoidance(cwnd, ack, ssthresh, rtt):
+def congestion_avoidance(cwnd, ack, ssthresh, rtt, last_ack_number):
     for server_packet in ack:
         if server_packet.ack_number > last_ack_number:
             cwnd += 1 / cwnd
@@ -31,7 +35,7 @@ def congestion_avoidance(cwnd, ack, ssthresh, rtt):
 
     return cwnd, last_ack_number
 
-def fast_retransmit(cwnd, ack, ssthresh, rtt, unacked_packets):
+def fast_retransmit(cwnd, ack, ssthresh, rtt, unacked_packets, last_ack_number):
 
     counts = {}
     retransmit_packets = set()
@@ -50,6 +54,19 @@ def fast_retransmit(cwnd, ack, ssthresh, rtt, unacked_packets):
 
     return cwnd, ssthresh, retransmit_packets
 
+def checksum(data):
+    return sum(data) % 65535
+
+def serialize_client_packets(packet):
+    header = struct.pack('!IH', packet.seq_number, packet.checksum)
+    full_packet = header + packet.data
+    return full_packet
+
+def deserialize_server_packets(data):
+    ack_number = struct.unpack("!I", data)[0]
+    return Server_Packet(ack_number=ack_number)
+    
+
 def main():
 
     one_chunk = 1024
@@ -65,11 +82,31 @@ def main():
 
             packet = Client_Packet(
                 seq_number=seq_number,
-                checksum=0,
+                checksum=checksum(chunk),
                 data=chunk
             )
             
             packets.append(packet)
             seq_number += len(chunk)
+    
 
-        return packets
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket.settimeout(.5)
+
+    server_address = ("localhost", 5000)
+
+    #testing one packet
+    serialized_packet = serialize_client_packets(packets[0])
+    client_socket.sendto(serialized_packet, server_address)
+
+    ack_bytes, server = client_socket.recvfrom(1024)
+    ack_packet = deserialize_server_packets(ack_bytes)
+
+    # printing test
+    print(ack_packet.ack_number)
+
+    return packets
+
+
+if __name__ == "__main__":
+    main()
