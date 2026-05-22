@@ -32,6 +32,9 @@ def deserialize_client_packets(packet_bytes):
 def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((localhost, 5000))
+
+    expected_seq_number = 0
+
     with open("received.txt", "wb") as f:
         while True:
             full_packet, client_address = server_socket.recvfrom(1030)
@@ -41,10 +44,14 @@ def main():
             if checksum(packet.data) != packet.checksum:
                 continue
         
-            f.write(packet.data)
-            f.flush()
 
-            ack_number = packet.seq_number + len(packet.data)
+            if packet.seq_number == expected_seq_number:
+                f.write(packet.data)
+                f.flush()
+
+                expected_seq_number += len(packet.data)
+
+            ack_number = expected_seq_number
             ack_bytes = struct.pack("!I", ack_number)
 
             server_socket.sendto(ack_bytes, client_address)
