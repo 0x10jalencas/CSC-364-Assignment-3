@@ -32,23 +32,25 @@ def deserialize_client_packets(packet_bytes):
 def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((localhost, 5000))
-    while True:
-        full_packet, client_address = server_socket.recvfrom(1030)
+    with open("received.txt", "wb") as f:
+        while True:
+            full_packet, client_address = server_socket.recvfrom(1030)
 
-        packet = deserialize_client_packets(full_packet)
+            packet = deserialize_client_packets(full_packet)
 
-        if checksum(packet.data) != packet.checksum:
-            continue
-    
-        ack_number = packet.seq_number + len(packet.data)
-        ack_bytes = struct.pack("!I", ack_number)
+            if checksum(packet.data) != packet.checksum:
+                continue
+        
+            f.write(packet.data)
+            f.flush()
 
-        # testing one packet
-        print("received seq:", packet.seq_number)
-        print("sending ACK:", ack_number)
+            ack_number = packet.seq_number + len(packet.data)
+            ack_bytes = struct.pack("!I", ack_number)
 
-        server_socket.sendto(ack_bytes, client_address)
+            server_socket.sendto(ack_bytes, client_address)
 
+            print("received seq:", packet.seq_number)
+            print("sending ACK:", ack_number)
 
 
 if __name__ == "__main__":

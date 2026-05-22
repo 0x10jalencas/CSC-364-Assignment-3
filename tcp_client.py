@@ -93,15 +93,15 @@ def main():
 
     server_address = ("localhost", 5000)
 
-    #testing one packet
-    serialized_packet = serialize_client_packets(packets[0])
-    client_socket.sendto(serialized_packet, server_address)
+    for packet in packets:
+        serialized_packet = serialize_client_packets(packet)
+        client_socket.sendto(serialized_packet, server_address)
 
-    ack_bytes, server = client_socket.recvfrom(1024)
-    ack_packet = deserialize_server_packets(ack_bytes)
+        ack_bytes, server = client_socket.recvfrom(1024)
+        ack_packet = deserialize_server_packets(ack_bytes)
 
-    # printing test
-    print(ack_packet.ack_number)
+        print("received ACK:", ack_packet.ack_number)
+
 
     return packets
 
