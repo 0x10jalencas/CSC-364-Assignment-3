@@ -2,8 +2,6 @@ import struct
 import socket
 from dataclasses import dataclass
 
-
-
 @dataclass
 class Client_Packet:
     seq_number: int
