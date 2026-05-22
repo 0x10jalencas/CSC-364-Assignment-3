@@ -1,5 +1,6 @@
 import struct
 import socket
+import random
 from dataclasses import dataclass
 
 localhost = "127.0.0.1"
@@ -29,15 +30,23 @@ def deserialize_client_packets(packet_bytes):
         data=data
     )
 
+def should_drop_packet(loss_probability):
+    return random.random() < loss_probability
+
 def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((localhost, 5000))
 
     expected_seq_number = 0
+    loss_probability = 0.1
 
     with open("received.txt", "wb") as f:
         while True:
             full_packet, client_address = server_socket.recvfrom(1030)
+
+            if should_drop_packet(loss_probability):
+                print("a dropped packet")
+                continue
 
             packet = deserialize_client_packets(full_packet)
 

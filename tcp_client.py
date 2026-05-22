@@ -94,14 +94,25 @@ def main():
     server_address = ("localhost", 5000)
 
     for packet in packets:
-        serialized_packet = serialize_client_packets(packet)
-        client_socket.sendto(serialized_packet, server_address)
+        packet_acked = False
 
-        ack_bytes, server = client_socket.recvfrom(1024)
-        ack_packet = deserialize_server_packets(ack_bytes)
+        while not packet_acked:
+            serialized_packet = serialize_client_packets(packet)
+            client_socket.sendto(serialized_packet, server_address)
 
-        print("received ACK:", ack_packet.ack_number)
+            try:
+                ack_bytes, server = client_socket.recvfrom(1024)
+                ack_packet = deserialize_server_packets(ack_bytes)
 
+                print("received ACK:", ack_packet.ack_number)
+
+                expected_ack = packet.seq_number + len(packet.data)
+
+                if ack_packet.ack_number >= expected_ack:
+                    packet_acked = True
+            
+            except socket.timeout:
+                print("timeout, retransmitting packet:", packet.seq_number)
 
     return packets
 
