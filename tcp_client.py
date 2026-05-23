@@ -111,6 +111,7 @@ def main():
 
     next_packet_index = 0
     unacked_packets = {}
+    duplicate_ack_count = 0
 
 
     while next_packet_index < len(packets) or len(unacked_packets) > 0:
@@ -131,22 +132,45 @@ def main():
 
             print("received ACK:", ack_packet.ack_number)
 
-            remove_the_acked_packets(unacked_packets, ack_packet.ack_number)
+            if ack_packet.ack_number > last_ack_number:
+                duplicate_ack_count = 0
 
-            if cwnd < ssthresh:
-                cwnd, last_ack_number = slow_start(
-                    cwnd,ssthresh, 
-                    [ack_packet],
-                    rtt,
-                    last_ack_number)
-            else:
-                cwnd, last_ack_number = congestion_avoidance(
-                    cwnd,
-                    [ack_packet],
-                    ssthresh,
-                    rtt,
-                    last_ack_number)
+                remove_the_acked_packets(unacked_packets, ack_packet.ack_number)
 
+                if cwnd < ssthresh:
+                    cwnd, last_ack_number = slow_start(
+                        cwnd,ssthresh, 
+                        [ack_packet],
+                        rtt,
+                        last_ack_number)
+                else:
+                    cwnd, last_ack_number = congestion_avoidance(
+                        cwnd,
+                        [ack_packet],
+                        ssthresh,
+                        rtt,
+                        last_ack_number)
+                    
+
+
+            elif ack_packet.ack_number == last_ack_number:
+                duplicate_ack_count += 1
+
+                print("duplicate ACK count:", duplicate_ack_count)
+
+                if duplicate_ack_count == 3:
+                    missing_seq = ack_packet.ack_number
+
+                    if missing_seq in unacked_packets:
+                        packet = unacked_packets[missing_seq]
+
+                        serialized_packet = serialize_client_packets(packet)
+                        client_socket.sendto(serialized_packet, server_address)
+
+                        print("fast retransmit packet:", missing_seq)
+
+                        ssthresh = max(cwnd / 2, 1)
+                        cwnd = ssthresh
             rtt += 1
             print("cwnd:", cwnd)
 
@@ -166,6 +190,7 @@ def main():
 
                 ssthresh = max(cwnd / 2, 1)
                 cwnd = 1
+                duplicate_ack_count = 0
 
     return packets
 

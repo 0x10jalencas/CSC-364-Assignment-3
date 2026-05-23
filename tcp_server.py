@@ -38,7 +38,8 @@ def main():
     server_socket.bind((localhost, 5000))
 
     expected_seq_number = 0
-    loss_probability = 0
+    loss_probability = 0.01
+    buffered_packets = {}
 
     with open("received.txt", "wb") as f:
         while True:
@@ -54,11 +55,17 @@ def main():
                 continue
         
 
-            if packet.seq_number == expected_seq_number:
-                f.write(packet.data)
-                f.flush()
+            if packet.seq_number >= expected_seq_number:
+                buffered_packets[packet.seq_number] = packet.data
 
-                expected_seq_number += len(packet.data)
+                while expected_seq_number in buffered_packets:
+                    data = buffered_packets[expected_seq_number]
+
+                    f.write(data)
+                    f.flush()
+
+                    del buffered_packets[expected_seq_number]
+                    expected_seq_number += len(data)
 
             ack_number = expected_seq_number
             ack_bytes = struct.pack("!I", ack_number)
