@@ -113,6 +113,10 @@ def main():
     unacked_packets = {}
     duplicate_ack_count = 0
 
+    cwnd_log = []
+    retransmission_log = []
+    retransmission_count = 0
+
 
     while next_packet_index < len(packets) or len(unacked_packets) > 0:
 
@@ -121,6 +125,7 @@ def main():
 
             serialized_packet = serialize_client_packets(packet)
             client_socket.sendto(serialized_packet, server_address)
+            
 
 
             unacked_packets[packet.seq_number] = packet
@@ -167,12 +172,15 @@ def main():
                         serialized_packet = serialize_client_packets(packet)
                         client_socket.sendto(serialized_packet, server_address)
 
+                        retransmission_count += 1
                         print("fast retransmit packet:", missing_seq)
 
                         ssthresh = max(cwnd / 2, 1)
                         cwnd = ssthresh
             rtt += 1
             print("cwnd:", cwnd)
+            cwnd_log.append((rtt, cwnd))
+            retransmission_log.append((rtt, retransmission_count))
 
 
         except socket.timeout:
@@ -185,15 +193,27 @@ def main():
 
                 serialized_packet = serialize_client_packets(packet)
                 client_socket.sendto(serialized_packet, server_address)
-
+            
+                retransmission_count += 1
                 print("retransmitting packet:", oldest_seq)
+                
 
                 ssthresh = max(cwnd / 2, 1)
                 cwnd = 1
                 duplicate_ack_count = 0
 
-    return packets
 
+    with open("cwnd_log.csv", "w") as f:
+        f.write("rtt,cwnd\n")
+        for rtt_value, cwnd_value in cwnd_log:
+            f.write(f"{rtt_value},{cwnd_value}\n")
+
+    with open("retransmission_log.csv", "w") as f:
+        f.write("rtt,retransmissions\n")
+        for rtt_value, retransmission_value in retransmission_log:
+            f.write(f"{rtt_value},{retransmission_value}\n")                
+
+    return packets
 
 if __name__ == "__main__":
     main()
