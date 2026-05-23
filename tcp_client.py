@@ -109,45 +109,60 @@ def main():
     rtt = 0
     last_ack_number = 0
 
-    for packet in packets:
-        packet_acked = False
+    next_packet_index = 0
+    unacked_packets = {}
 
-        while not packet_acked:
+
+    while next_packet_index < len(packets) or len(unacked_packets) > 0:
+
+        while next_packet_index < len(packets) and len(unacked_packets) < int(cwnd):
+            packet = packets[next_packet_index]
+
             serialized_packet = serialize_client_packets(packet)
             client_socket.sendto(serialized_packet, server_address)
 
-            try:
-                ack_bytes, server = client_socket.recvfrom(1024)
-                ack_packet = deserialize_server_packets(ack_bytes)
 
-                print("received ACK:", ack_packet.ack_number)
+            unacked_packets[packet.seq_number] = packet
+            next_packet_index += 1
 
-                expected_ack = packet.seq_number + len(packet.data)
+        try:
+            ack_bytes, server = client_socket.recvfrom(1024)
+            ack_packet = deserialize_server_packets(ack_bytes)
 
-                if ack_packet.ack_number >= expected_ack:
-                    packet_acked = True
+            print("received ACK:", ack_packet.ack_number)
 
-                if cwnd < ssthresh:
-                    cwnd, last_ack_number = slow_start(
-                        cwnd, ssthresh, 
-                        [ack_packet],
-                        rtt,
-                        last_ack_number)
-                else:
-                    cwnd, last_ack_number = congestion_avoidance(
-                        cwnd,
-                        [ack_packet],
-                        ssthresh,
-                        rtt,
-                        last_ack_number)
+            remove_the_acked_packets(unacked_packets, ack_packet.ack_number)
 
-                rtt += 1
-                print("cwnd:", cwnd)
+            if cwnd < ssthresh:
+                cwnd, last_ack_number = slow_start(
+                    cwnd,ssthresh, 
+                    [ack_packet],
+                    rtt,
+                    last_ack_number)
+            else:
+                cwnd, last_ack_number = congestion_avoidance(
+                    cwnd,
+                    [ack_packet],
+                    ssthresh,
+                    rtt,
+                    last_ack_number)
 
-        
-            
-            except socket.timeout:
-                print("timeout, retransmitting packet:", packet.seq_number)
+            rtt += 1
+            print("cwnd:", cwnd)
+
+
+        except socket.timeout:
+            print("timeout")
+
+
+            if len(unacked_packets) > 0:
+                oldest_seq = min(unacked_packets)
+                packet = unacked_packets[oldest_seq]
+
+                serialized_packet = serialize_client_packets(packet)
+                client_socket.sendto(serialized_packet, server_address)
+
+                print("retransmitting packet:", oldest_seq)
 
                 ssthresh = max(cwnd / 2, 1)
                 cwnd = 1

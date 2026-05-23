@@ -38,7 +38,7 @@ def main():
     server_socket.bind((localhost, 5000))
 
     expected_seq_number = 0
-    loss_probability = 0.1
+    loss_probability = 0
 
     with open("received.txt", "wb") as f:
         while True:
