@@ -18,6 +18,7 @@ def slow_start(cwnd, ssthresh, ack, rtt, last_ack_number):
     for server_packet in ack:
         if server_packet.ack_number > last_ack_number:
             cwnd += 1
+            last_ack_number = server_packet.ack_number
         
         if cwnd >= ssthresh:
             cwnd = ssthresh
@@ -63,7 +64,17 @@ def serialize_client_packets(packet):
 def deserialize_server_packets(data):
     ack_number = struct.unpack("!I", data)[0]
     return Server_Packet(ack_number=ack_number)
-    
+
+def remove_the_acked_packets(unacked_packets, ack_number):
+    acked = []
+
+    for seq_number, packet in unacked_packets.items():
+        if seq_number + len(packet.data) <= ack_number:
+            acked.append(seq_number)
+
+    for seq_number in acked:
+        del unacked_packets[seq_number]
+
 
 def main():
 
@@ -93,6 +104,11 @@ def main():
 
     server_address = ("localhost", 5000)
 
+    cwnd = 1
+    ssthresh = 64
+    rtt = 0
+    last_ack_number = 0
+
     for packet in packets:
         packet_acked = False
 
@@ -110,9 +126,31 @@ def main():
 
                 if ack_packet.ack_number >= expected_ack:
                     packet_acked = True
+
+                if cwnd < ssthresh:
+                    cwnd, last_ack_number = slow_start(
+                        cwnd, ssthresh, 
+                        [ack_packet],
+                        rtt,
+                        last_ack_number)
+                else:
+                    cwnd, last_ack_number = congestion_avoidance(
+                        cwnd,
+                        [ack_packet],
+                        ssthresh,
+                        rtt,
+                        last_ack_number)
+
+                rtt += 1
+                print("cwnd:", cwnd)
+
+        
             
             except socket.timeout:
                 print("timeout, retransmitting packet:", packet.seq_number)
+
+                ssthresh = max(cwnd / 2, 1)
+                cwnd = 1
 
     return packets
 
